@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>曾氏修身阁</title>
+    <style>
+        :root { --ink: #2c3e50; --paper: #fcfaf2; --accent: #8c4332; --border: #d1c7b7; }
+
+        /* 针对大陆主流设备的字体适配 */
+        body {
+            background: #e5e5e5;
+            color: var(--ink);
+            font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "STKaiti", serif;
+            margin: 0; -webkit-tap-highlight-color: transparent;
+        }
+
+        .paper-bg {
+            min-height: 100vh;
+            background-color: var(--paper);
+            background-image: url('https://www.transparenttextures.com/patterns/rice-paper-2.png');
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.05);
+        }
+
+        /* 顶部导航：更有质感的木质色调 */
+        nav {
+            background: #4a2d26; padding: env(safe-area-inset-top) 0 10px 0;
+            display: flex; justify-content: center; gap: 25px;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        nav span { color: #d1c7b7; cursor: pointer; padding: 10px 5px; font-size: 16px; transition: 0.3s; position: relative; }
+        nav span.active { color: #fff; font-weight: bold; }
+        nav span.active::after { content: ''; position: absolute; bottom: 0; left: 20%; width: 60%; height: 2px; background: #fff; }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; box-sizing: border-box; }
+        .page { display: none; }
+        .page.active { display: block; animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 书卷感设计 */
+        .card {
+            background: transparent; border: 1px solid var(--border);
+            padding: 25px; margin-bottom: 20px; position: relative;
+            background: rgba(255,255,255,0.3);
+        }
+        .seal { /* 模拟印章效果 */
+            position: absolute; right: 10px; top: 10px; width: 50px; height: 50px;
+            border: 2px solid #8c4332; color: #8c4332; border-radius: 5px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: bold; transform: rotate(15deg);
+            opacity: 0.6; pointer-events: none;
+        }
+
+        h1 { text-align: center; color: var(--accent); font-family: "STKaiti", serif; letter-spacing: 4px; }
+
+        .task-item { margin-bottom: 25px; }
+        .task-label { font-weight: bold; color: var(--accent); margin-bottom: 12px; display: block; font-size: 15px; }
+
+        /* 移动端友好的大按钮 */
+        .btn-group { display: flex; gap: 12px; }
+        .score-btn {
+            flex: 1; padding: 15px 0; border: 1px solid var(--border);
+            background: #fff; border-radius: 8px; cursor: pointer;
+            font-family: inherit; font-size: 14px;
+        }
+        .score-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+
+        textarea {
+            width: 100%; border: 1px solid var(--border); background: rgba(255,255,255,0.5);
+            padding: 12px; font-family: inherit; font-size: 16px; border-radius: 8px;
+            box-sizing: border-box; line-height: 1.6;
+        }
+
+        .btn-save {
+            background: var(--accent); color: #fff; width: 100%; padding: 18px;
+            border: none; border-radius: 30px; font-size: 18px; font-weight: bold;
+            margin-top: 20px; box-shadow: 0 4px 15px rgba(140,67,50,0.3);
+        }
+
+        /* 历史记录美化 */
+        .history-card { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #eee; }
+        .date-tag { display: inline-block; background: var(--accent); color: #fff; padding: 2px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="paper-bg">
+    <nav>
+        <span id="nav-write" class="active" onclick="showPage('write')">记日课</span>
+        <span id="nav-history" onclick="showPage('history')">阅旧账</span>
+        <span id="nav-settings" onclick="showPage('settings')">定规矩</span>
+    </nav>
+
+    <div class="container">
+        <div id="page-write" class="page active">
+            <h1>修身日记</h1>
+            <div id="quote-display" style="text-align:center; font-style:italic; margin-bottom:20px; color:#666;"></div>
+
+            <div class="card">
+                <div class="seal">慎独</div>
+                <label class="task-label">📅 日期</label>
+                <input type="date" id="diary-date" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+            </div>
+
+            <div id="dynamic-tasks"></div>
+
+            <div class="card">
+                <label class="task-label">⚡ 得失自省</label>
+                <textarea id="reflection" rows="5" placeholder="记录今日之过，思明日之改..."></textarea>
+            </div>
+
+            <button class="btn-save" onclick="saveDiary()">存案存心</button>
+        </div>
+
+        <div id="page-history" class="page">
+            <div id="history-list"></div>
+        </div>
+
+        <div id="page-settings" class="page">
+            <div class="card">
+                <h3>日课配置</h3>
+                <div id="config-list"></div>
+                <button onclick="addConfig()" style="width:100%; padding:12px; margin-top:15px; border:1px dashed var(--accent); background:none; color:var(--accent);">+ 增加修身项目</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 逻辑保持稳定并微调体验
+    let configs = JSON.parse(localStorage.getItem('zen_v6_configs')) || [
+        { name: '早起 (黎明即起)', type: 'score' },
+        { name: '读书 (每日必读)', type: 'text' },
+        { name: '静坐 (每日不拘时)', type: 'score' },
+        { name: '情绪 (不言人非)', type: 'score' }
+    ];
+    let history = JSON.parse(localStorage.getItem('zen_v6_history')) || [];
+    const quotes = ["百种弊病，皆从懒生。", "不为圣贤，便为禽兽。", "凡人做一事，便须全副精神。", "唯天下之至诚，能胜天下之至伪。"];
+
+    function showPage(p) {
+        document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('nav span').forEach(el => el.classList.remove('active'));
+        document.getElementById('page-'+p).classList.add('active');
+        document.getElementById('nav-'+p).classList.add('active');
+        if(p === 'write') renderWrite();
+        if(p === 'history') renderHistory();
+        if(p === 'settings') renderSettings();
+        window.scrollTo(0,0);
+    }
+
+    function renderWrite() {
+        document.getElementById('quote-display').innerText = `“${quotes[Math.floor(Math.random()*quotes.length)]}”`;
+        document.getElementById('diary-date').valueAsDate = new Date();
+        const area = document.getElementById('dynamic-tasks');
+        area.innerHTML = configs.map(cfg => `
+            <div class="card">
+                <label class="task-label">${cfg.name}</label>
+                ${cfg.type === 'score' ? `
+                    <div class="btn-group">
+                        <button class="score-btn" data-name="${cfg.name}" data-val="1" onclick="selectScore(this)">不及</button>
+                        <button class="score-btn" data-name="${cfg.name}" data-val="3" onclick="selectScore(this)">尚可</button>
+                        <button class="score-btn" data-name="${cfg.name}" data-val="5" onclick="selectScore(this)">精进</button>
+                    </div>
+                ` : `
+                    <textarea class="text-in" data-name="${cfg.name}" rows="2" placeholder="详情记录..."></textarea>
+                `}
+            </div>
+        `).join('');
+    }
+
+    function selectScore(btn) {
+        btn.parentElement.querySelectorAll('.score-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if(btn.dataset.val == 1) {
+            const ref = document.getElementById('reflection');
+            const name = btn.dataset.name;
+            if(!ref.value.includes(name)) ref.value += `【${name}】未达标：`;
+        }
+    }
+
+    function saveDiary() {
+        const entry = {
+            id: Date.now(),
+            date: document.getElementById('diary-date').value,
+            reflection: document.getElementById('reflection').value,
+            scores: Array.from(document.querySelectorAll('.score-btn.active')).map(b => ({name: b.dataset.name, val: b.dataset.val})),
+            texts: Array.from(document.querySelectorAll('.text-in')).map(i => ({name: i.dataset.name, val: i.value}))
+        };
+        history.unshift(entry);
+        localStorage.setItem('zen_v6_history', JSON.stringify(history));
+        alert("存案成功，自省自强！");
+        showPage('history');
+    }
+
+    function renderHistory() {
+        const list = document.getElementById('history-list');
+        list.innerHTML = history.length === 0 ? '<p style="text-align:center; color:#999;">暂无记录，今日开始修身吧。</p >' :
+        history.map(item => `
+            <div class="history-card">
+                <div class="date-tag">${item.date}</div>
+                <div style="font-size:14px; color:#444;">
+                    ${item.scores.map(s => `<b>${s.name}:</b> ${'★'.repeat(s.val/1.5+1)}<br>`).join('')}
+                    ${item.texts.map(t => `<b>${t.name}:</b> ${t.val}<br>`).join('')}
+                    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #eee; color:var(--accent);">
+                        <i>省：${item.reflection || '无'}</i>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderSettings() {
+        const list = document.getElementById('config-list');
+        list.innerHTML = configs.map((c,i) => `
+            <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+                <input type="text" value="${c.name}" onchange="updateCfg(${i},'name',this.value)" style="flex:2; padding:8px; border:1px solid #ddd;">
+                <select onchange="updateCfg(${i},'type',this.value)" style="flex:1; padding:8px;">
+                    <option value="score" ${c.type==='score'?'selected':''}>打分</option>
+                    <option value="text" ${c.type==='text'?'selected':''}>填空</option>
+                </select>
+                <button onclick="delCfg(${i})" style="color:red; background:none; border:none; font-size:20px;">×</button>
+            </div>
+        `).join('');
+    }
+    function updateCfg(i,k,v){ configs[i][k]=v; localStorage.setItem('zen_v6_configs', JSON.stringify(configs)); }
+    function delCfg(i){ configs.splice(i,1); localStorage.setItem('zen_v6_configs', JSON.stringify(configs)); renderSettings(); }
+    function addConfig(){ configs.push({name:'新项目', type:'score'}); renderSettings(); }
+
+    renderWrite();
+</script>
+</body>
+</html>
