@@ -2,39 +2,42 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>境·界 | 灵魂感知修正版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>境·界 | 3D意境原型</title>
     <style>
-        :root { --zen-bg: #1a1a1a; --zen-ink: #fdfaf2; }
+        :root { --bg: #0a0c10; --white: #fdfaf2; }
         
+        * { 
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-touch-callout: none; 
+            -webkit-user-select: none; 
+            user-select: none; 
+        }
+
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: var(--zen-bg);
+            overflow: hidden; background-color: var(--bg);
             font-family: "STKaiti", "KaiTi", serif;
-            /* 关键：禁止系统长按菜单、禁止选中文本 */
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
             touch-action: none; 
         }
 
         #canvas { position: absolute; top: 0; left: 0; z-index: 1; }
 
         .overlay {
-            position: relative; z-index: 10;
-            height: 100%; display: flex; flex-direction: column;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-            pointer-events: none;
+            pointer-events: none; /* 核心：防止文字被框选 */
         }
 
         #prompt-text {
-            color: var(--zen-ink); font-size: 20px; letter-spacing: 5px;
-            opacity: 0.5; transition: opacity 1s;
+            color: var(--white); font-size: 24px; letter-spacing: 8px;
+            opacity: 0.4; transition: opacity 1.5s; font-weight: 300;
         }
 
         #mood-feedback {
-            position: fixed; bottom: 60px; color: var(--zen-ink);
-            font-size: 14px; opacity: 0.3; letter-spacing: 2px;
+            position: fixed; bottom: 80px; color: var(--white);
+            font-size: 14px; opacity: 0.2; letter-spacing: 3px;
         }
     </style>
 </head>
@@ -42,8 +45,8 @@
 
     <canvas id="canvas"></canvas>
     <div class="overlay">
-        <p id="prompt-text">轻触屏幕，与此时的你对话</p >
-        <p id="mood-feedback">正在感应心境...</p >
+        <p id="prompt-text">凝神 · 触碰</p >
+        <p id="mood-feedback">感应中...</p >
     </div>
 
 <script>
@@ -53,113 +56,142 @@
     const feedback = document.getElementById('mood-feedback');
 
     let width, height, particles = [];
-    let mouse = { x: -1000, y: -1000, active: false, startTime: 0 };
+    let mouse = { x: -1000, y: -1000, active: false, pressTime: 0 };
+
+    // 粒子分级：5个尺寸规格
+    const sizes = [1.2, 2.5, 4, 6, 9]; // 对应远景到近景
 
     class Particle {
         constructor() {
-            this.reset();
+            this.init();
         }
-        reset() {
+        init() {
             this.x = Math.random() * width;
             this.y = Math.random() * height;
-            // 降低初始速度，让它们更稳重
-            this.vx = (Math.random() - 0.5) * 0.3;
-            this.vy = (Math.random() - 0.5) * 0.3;
-            this.size = Math.random() * 2 + 1;
-            this.alpha = Math.random() * 0.4 + 0.1;
-            this.friction = 0.95; // 增加摩擦力，防止乱动
+            
+            // 分级逻辑
+            const level = Math.floor(Math.random() * 5);
+            this.baseSize = sizes[level];
+            
+            // 3D 景深模拟：大号粒子（近处）移动略快，小号（远处）平稳
+            this.speedFactor = (level + 1) * 0.15;
+            this.vx = (Math.random() - 0.5) * this.speedFactor;
+            this.vy = (Math.random() - 0.5) * this.speedFactor;
+            
+            this.friction = 0.96; // 阻力
+            this.alpha = 0; // 初始全透明，慢慢浮现
+            this.targetAlpha = Math.random() * 0.6 + 0.2;
+            
+            // 呼吸参数：每个粒子节奏不同
+            this.breatheSpeed = 0.01 + Math.random() * 0.02;
+            this.breatheOffset = Math.random() * Math.PI * 2;
         }
+
         update() {
+            // 基础漂浮
             this.x += this.vx;
             this.y += this.vy;
-            
-            // 摩擦力衰减速度
-            this.vx *= this.friction;
-            this.vy *= this.friction;
 
-            // 保持微弱的随机漂浮力
-            this.vx += (Math.random() - 0.5) * 0.05;
-            this.vy += (Math.random() - 0.5) * 0.05;
-
+            // 智能边界：平滑反弹
             if (this.x < 0 || this.x > width) this.vx *= -1;
             if (this.y < 0 || this.y > height) this.vy *= -1;
 
+            // 交互：由慢到快的循序渐进引力
             if (mouse.active) {
                 const dx = mouse.x - this.x;
                 const dy = mouse.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
                 
-                if (dist < 250) {
-                    // 吸引力逻辑：距离越近，吸引力越平滑
-                    const force = (250 - dist) * 0.0005; 
-                    this.vx += dx * force;
-                    this.vy += dy * force;
+                if (dist < 300) {
+                    // 核心算法：基于距离的二次方引力 + 时间累积
+                    const duration = (Date.now() - mouse.pressTime) / 1000;
+                    const acceleration = Math.min(duration * 0.5, 2); // 启动加速度
+                    const force = (300 - dist) / 300 * acceleration * 0.08;
+                    
+                    this.vx += dx * force * (this.baseSize / 5); 
+                    this.vy += dy * force * (this.baseSize / 5);
                 }
+            } else {
+                this.vx *= this.friction;
+                this.vy *= this.friction;
             }
+
+            // 呼吸效果计算
+            this.breatheOffset += this.breatheSpeed;
+            this.alpha = this.targetAlpha * (0.4 + Math.abs(Math.sin(this.breatheOffset)) * 0.6);
         }
+
         draw() {
+            ctx.save();
             ctx.globalAlpha = this.alpha;
-            ctx.fillStyle = '#fdfaf2';
+            
+            // 3D 质感：近景大粒子增加发光层
+            if (this.baseSize > 5) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = "rgba(253, 250, 242, 0.5)";
+            }
+            
+            ctx.fillStyle = "#fdfaf2";
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.baseSize, 0, Math.PI * 2);
             ctx.fill();
+            ctx.restore();
         }
     }
 
-    function init() {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
+    function setup() {
+        // 提高清晰度：适配高分屏 (Retina)
+        const dpr = window.devicePixelRatio || 1;
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.scale(dpr, dpr);
+
         particles = [];
-        for (let i = 0; i < 120; i++) particles.push(new Particle());
+        for (let i = 0; i < 100; i++) particles.push(new Particle());
     }
 
-    function animate() {
-        ctx.fillStyle = '#1a1a1a';
+    function loop() {
+        // 每一帧留下一层极薄的黑背景，形成淡淡的残影轨迹，增加流畅感
+        ctx.fillStyle = "rgba(10, 12, 16, 0.4)";
         ctx.fillRect(0, 0, width, height);
-        particles.forEach(p => { p.update(); p.draw(); });
-        requestAnimationFrame(animate);
+
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+        requestAnimationFrame(loop);
     }
 
-    // 适配移动端的触摸事件
-    function handleTouch(e) {
-        e.preventDefault(); // 阻止浏览器默认行为（如长按复制）
-        const touch = e.touches[0];
-        mouse.x = touch.clientX;
-        mouse.y = touch.clientY;
-    }
-
-    window.addEventListener('touchstart', (e) => {
+    // 严密的触摸监听
+    window.addEventListener('touchstart', e => {
         mouse.active = true;
-        mouse.startTime = Date.now();
-        handleTouch(e);
-        prompt.style.opacity = '0.1';
+        mouse.pressTime = Date.now();
+        const t = e.touches[0];
+        mouse.x = t.clientX;
+        mouse.y = t.clientY;
+        prompt.style.opacity = "0.05";
+        e.preventDefault();
     }, { passive: false });
 
-    window.addEventListener('touchmove', (e) => {
-        handleTouch(e);
+    window.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+        mouse.x = t.clientX;
+        mouse.y = t.clientY;
+        e.preventDefault();
     }, { passive: false });
 
     window.addEventListener('touchend', () => {
-        const duration = Date.now() - mouse.startTime;
         mouse.active = false;
-        mouse.x = -1000; // 移开吸引点
-        mouse.y = -1000;
-        analyzeMood(duration);
+        setTimeout(() => { prompt.style.opacity = "0.4"; }, 1000);
     });
 
-    function analyzeMood(duration) {
-        if (duration > 600) {
-            feedback.innerText = "感应到你的沉静。此刻，万物陪你静默。";
-        } else if (duration < 200) {
-            feedback.innerText = "节奏稍快了。试着慢下来，去触碰光。";
-        } else {
-            feedback.innerText = "感受到你的温度了。";
-        }
-        setTimeout(() => { prompt.style.opacity = '0.5'; }, 2000);
-    }
-
-    init(); animate();
-    window.addEventListener('resize', init);
+    window.addEventListener('resize', setup);
+    setup();
+    loop();
 </script>
 </body>
 </html>
