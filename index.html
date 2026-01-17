@@ -79,13 +79,13 @@
             this.vx = 0;
             this.vy = 0;
             
-            this.friction = 1.50; // 阻力，越高滑动越久
+            this.friction = 0.92; // 阻力，越高滑动越久
             this.springFactor = 0.005 + Math.random() * 0.01; // 回家拉力强度
             
             this.breatheSpeed = 0.01 + Math.random() * 0.015;
             this.breatheOffset = Math.random() * Math.PI * 2;
             this.alpha = 0;
-            this.maxSpeed = 1.5 + (level * 0.5); // 限制最大速度，防止过快
+            this.maxSpeed = 1.25 + (level * 0.25); // 限制最大速度，防止过快
         }
 
         update() {
@@ -192,4 +192,3 @@
 </script>
 </body>
 </html>
-
