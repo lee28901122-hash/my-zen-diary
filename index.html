@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>境·界 | 3D意境原型</title>
+    <title>境·界 | 灵动交互版</title>
     <style>
-        :root { --bg: #0a0c10; --white: #fdfaf2; }
+        :root { --bg: #0d0f14; --white: #fdfaf2; }
         
+        /* 彻底消除所有选中文本的可能性 */
         * { 
             -webkit-tap-highlight-color: transparent; 
             -webkit-touch-callout: none; 
             -webkit-user-select: none; 
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
             user-select: none; 
         }
 
@@ -27,17 +31,18 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             z-index: 10; display: flex; flex-direction: column;
             justify-content: center; align-items: center;
-            pointer-events: none; /* 核心：防止文字被框选 */
+            /* 让文字层完全不响应触摸，所有触摸直接穿透到Canvas */
+            pointer-events: none; 
         }
 
         #prompt-text {
-            color: var(--white); font-size: 24px; letter-spacing: 8px;
-            opacity: 0.4; transition: opacity 1.5s; font-weight: 300;
+            color: var(--white); font-size: 22px; letter-spacing: 6px;
+            opacity: 0.3; transition: opacity 2s ease; font-weight: 300;
         }
 
         #mood-feedback {
             position: fixed; bottom: 80px; color: var(--white);
-            font-size: 14px; opacity: 0.2; letter-spacing: 3px;
+            font-size: 13px; opacity: 0.15; letter-spacing: 2px;
         }
     </style>
 </head>
@@ -46,117 +51,108 @@
     <canvas id="canvas"></canvas>
     <div class="overlay">
         <p id="prompt-text">凝神 · 触碰</p >
-        <p id="mood-feedback">感应中...</p >
+        <p id="mood-feedback">万物归心...</p >
     </div>
 
 <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const prompt = document.getElementById('prompt-text');
-    const feedback = document.getElementById('mood-feedback');
 
     let width, height, particles = [];
-    let mouse = { x: -1000, y: -1000, active: false, pressTime: 0 };
+    let mouse = { x: -1000, y: -1000, active: false };
 
-    // 粒子分级：5个尺寸规格
-    const sizes = [1.2, 2.5, 4, 6, 9]; // 对应远景到近景
+    const sizes = [1.5, 3, 4.5, 6, 8];
 
     class Particle {
         constructor() {
             this.init();
         }
         init() {
-            this.x = Math.random() * width;
-            this.y = Math.random() * height;
+            // 设置初始位置（家）
+            this.homeX = this.x = Math.random() * width;
+            this.homeY = this.y = Math.random() * height;
             
-            // 分级逻辑
             const level = Math.floor(Math.random() * 5);
             this.baseSize = sizes[level];
             
-            // 3D 景深模拟：大号粒子（近处）移动略快，小号（远处）平稳
-            this.speedFactor = (level + 1) * 0.15;
-            this.vx = (Math.random() - 0.5) * this.speedFactor;
-            this.vy = (Math.random() - 0.5) * this.speedFactor;
+            this.vx = 0;
+            this.vy = 0;
             
-            this.friction = 0.96; // 阻力
-            this.alpha = 0; // 初始全透明，慢慢浮现
-            this.targetAlpha = Math.random() * 0.6 + 0.2;
+            this.friction = 0.92; // 阻力，越高滑动越久
+            this.springFactor = 0.005 + Math.random() * 0.01; // 回家拉力强度
             
-            // 呼吸参数：每个粒子节奏不同
-            this.breatheSpeed = 0.01 + Math.random() * 0.02;
+            this.breatheSpeed = 0.01 + Math.random() * 0.015;
             this.breatheOffset = Math.random() * Math.PI * 2;
+            this.alpha = 0;
+            this.maxSpeed = 1.5 + (level * 0.5); // 限制最大速度，防止过快
         }
 
         update() {
-            // 基础漂浮
-            this.x += this.vx;
-            this.y += this.vy;
-
-            // 智能边界：平滑反弹
-            if (this.x < 0 || this.x > width) this.vx *= -1;
-            if (this.y < 0 || this.y > height) this.vy *= -1;
-
-            // 交互：由慢到快的循序渐进引力
             if (mouse.active) {
+                // 交互中：受指尖引力
                 const dx = mouse.x - this.x;
                 const dy = mouse.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
                 
-                if (dist < 300) {
-                    // 核心算法：基于距离的二次方引力 + 时间累积
-                    const duration = (Date.now() - mouse.pressTime) / 1000;
-                    const acceleration = Math.min(duration * 0.5, 2); // 启动加速度
-                    const force = (300 - dist) / 300 * acceleration * 0.08;
-                    
-                    this.vx += dx * force * (this.baseSize / 5); 
-                    this.vy += dy * force * (this.baseSize / 5);
+                if (dist < 350) {
+                    const force = (350 - dist) * 0.0003; 
+                    this.vx += dx * force;
+                    this.vy += dy * force;
                 }
             } else {
-                this.vx *= this.friction;
-                this.vy *= this.friction;
+                // 回家逻辑：弹性拉力
+                const dx = this.homeX - this.x;
+                const dy = this.homeY - this.y;
+                this.vx += dx * this.springFactor;
+                this.vy += dy * this.springFactor;
             }
 
-            // 呼吸效果计算
+            // 速度上限控制
+            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+            if (speed > this.maxSpeed) {
+                this.vx = (this.vx / speed) * this.maxSpeed;
+                this.vy = (this.vy / speed) * this.maxSpeed;
+            }
+
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+            this.x += this.vx;
+            this.y += this.vy;
+
             this.breatheOffset += this.breatheSpeed;
-            this.alpha = this.targetAlpha * (0.4 + Math.abs(Math.sin(this.breatheOffset)) * 0.6);
+            this.alpha = 0.2 + Math.abs(Math.sin(this.breatheOffset)) * 0.6;
         }
 
         draw() {
-            ctx.save();
             ctx.globalAlpha = this.alpha;
-            
-            // 3D 质感：近景大粒子增加发光层
-            if (this.baseSize > 5) {
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = "rgba(253, 250, 242, 0.5)";
-            }
-            
             ctx.fillStyle = "#fdfaf2";
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.baseSize, 0, Math.PI * 2);
             ctx.fill();
-            ctx.restore();
+            
+            if (this.baseSize > 5) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "rgba(253, 250, 242, 0.3)";
+            }
         }
     }
 
     function setup() {
-        // 提高清晰度：适配高分屏 (Retina)
         const dpr = window.devicePixelRatio || 1;
         width = window.innerWidth;
         height = window.innerHeight;
         canvas.width = width * dpr;
         canvas.height = height * dpr;
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
         ctx.scale(dpr, dpr);
 
         particles = [];
-        for (let i = 0; i < 100; i++) particles.push(new Particle());
+        for (let i = 0; i < 80; i++) particles.push(new Particle());
     }
 
     function loop() {
-        // 每一帧留下一层极薄的黑背景，形成淡淡的残影轨迹，增加流畅感
-        ctx.fillStyle = "rgba(10, 12, 16, 0.4)";
+        // 背景微光，不再使用残影，确保画质清晰
+        ctx.fillStyle = "#0d0f14";
         ctx.fillRect(0, 0, width, height);
 
         particles.forEach(p => {
@@ -166,27 +162,28 @@
         requestAnimationFrame(loop);
     }
 
-    // 严密的触摸监听
-    window.addEventListener('touchstart', e => {
-        mouse.active = true;
-        mouse.pressTime = Date.now();
+    // 针对手机端极致优化的事件
+    const handleTouch = (e) => {
         const t = e.touches[0];
         mouse.x = t.clientX;
         mouse.y = t.clientY;
+    };
+
+    window.addEventListener('touchstart', e => {
+        mouse.active = true;
+        handleTouch(e);
         prompt.style.opacity = "0.05";
         e.preventDefault();
     }, { passive: false });
 
     window.addEventListener('touchmove', e => {
-        const t = e.touches[0];
-        mouse.x = t.clientX;
-        mouse.y = t.clientY;
+        handleTouch(e);
         e.preventDefault();
     }, { passive: false });
 
     window.addEventListener('touchend', () => {
         mouse.active = false;
-        setTimeout(() => { prompt.style.opacity = "0.4"; }, 1000);
+        setTimeout(() => { prompt.style.opacity = "0.3"; }, 1500);
     });
 
     window.addEventListener('resize', setup);
